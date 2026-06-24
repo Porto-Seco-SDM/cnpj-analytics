@@ -1,0 +1,56 @@
+# cnpj-analytics
+
+API HTTP de **analytics** sobre os dados abertos de CNPJ da Receita Federal, construída
+sobre o schema relacional/dimensional `analytics` (derivado do projeto
+[minha-receita](../minha-receita)). Enquanto o `minha-receita` serve lookup por CNPJ a
+partir de um documento `jsonb`, este projeto é otimizado para **agregações, filtros livres
+e rede societária** — coisas inviáveis no modelo jsonb.
+
+## Stack
+
+- Go 1.23 + `net/http` (roteamento method+path do Go 1.22) + `pgx/v5`/`pgxpool`
+- PostgreSQL 18 (schema `analytics`)
+
+## Estrutura
+
+```
+cmd/api/          entrypoint do servidor
+internal/db/      pool de conexão pgx
+internal/api/     servidor, rotas e handlers
+analytics/        DDL + ETL do schema (SQL puro + load.sh)
+```
+
+## Como rodar
+
+```bash
+cp .env.example .env
+docker compose up -d postgres
+
+# 1) cria o schema e carrega os dados (zips da Receita em ./data)
+bash analytics/load.sh
+
+# 2) sobe a API
+go run ./cmd/api          # ou: docker compose up --build api
+```
+
+> Os zips da Receita (`Empresas*.zip`, `Estabelecimentos*.zip`, …) devem estar em `./data`,
+> iguais aos do minha-receita. A carga completa leva horas; ver `analytics/README` herdado.
+
+## Endpoints
+
+| Método | Rota | Descrição |
+|---|---|---|
+| GET | `/healthz` | Liveness + ping no banco |
+| GET | `/stats/capital-por-natureza?limit=10` | Ranking de capital social por natureza jurídica (via materialized view) |
+| GET | `/stats/empresas?uf=SP&cnae=6201501&situacao=2` | Contagem de estabelecimentos com filtros opcionais |
+| GET | `/empresas/{cnpj_basico}` | Empresa + estabelecimentos + QSA (8 dígitos) |
+| GET | `/socios?doc=***846761**&limit=50` | Rede societária: empresas vinculadas a um documento de sócio |
+
+### Exemplos
+
+```bash
+curl 'http://localhost:8001/stats/empresas?uf=DF&situacao=2'
+curl 'http://localhost:8001/stats/capital-por-natureza?limit=5'
+curl 'http://localhost:8001/empresas/33683111'
+curl 'http://localhost:8001/socios?doc=***846761**'
+```

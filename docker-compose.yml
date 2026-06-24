@@ -1,0 +1,27 @@
+services:
+
+  postgres:
+    image: postgres:18-trixie
+    ports:
+      - 5432:5432
+    volumes:
+      - ./data/postgres:/var/lib/postgresql
+    environment:
+      POSTGRES_PASSWORD: cnpj
+      POSTGRES_USER: cnpj
+      POSTGRES_DB: cnpj
+    healthcheck:
+      test: ["CMD-SHELL", "sh -c 'pg_isready -U $${POSTGRES_USER}'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    ports:
+      - 8001:8001
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
